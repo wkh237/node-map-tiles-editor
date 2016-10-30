@@ -1,0 +1,9 @@
+{
+  "name": "Dummy-map-tiles",
+  "version": "0.0.1",
+  "private": true,
+  "Dependencies": {
+    "canvas": "^1.6.1",
+    "express": "^4.14.0"
+  }
+}
