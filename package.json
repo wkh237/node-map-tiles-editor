@@ -1,9 +1,26 @@
 {
-  "name": "Dummy-map-tiles",
+  "name": "dummy-tiles-sever",
   "version": "0.0.1",
-  "private": true,
-  "Dependencies": {
-    "canvas": "^1.6.1",
-    "express": "^4.14.0"
-  }
+  "description": "A node server generates dummy map tiles",
+  "engines": {
+    "node": "5.9.1"
+  },
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "4.13.3",
+    "canvas": "^1.6.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heroku/node-js-getting-started"
+  },
+  "keywords": [
+    "node",
+    "heroku",
+    "express"
+  ],
+  "license": "MIT"
 }

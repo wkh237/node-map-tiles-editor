@@ -1,11 +1,13 @@
-var Canvas = require('canvas');
 var express = require('express');
+var Canvas = require('canvas');
 var Image = Canvas.Image;
-var fs = require('fs');
-
-var PORT = 19999;
 var app = express();
 
+app.set('port', (process.env.PORT || 5000));
+
+app.listen(app.get('port'), function() {
+  console.log('Node app is running on port', app.get('port'));
+});
 
 app.get('/tiles/:z/:x/:y', function (req, res) {
   var x = req.params.x,
@@ -13,10 +15,6 @@ app.get('/tiles/:z/:x/:y', function (req, res) {
       z = req.params.z;
   console.log('make tile: ', x, y, z);
   res.type('image/png').send(generateTile(x,y,z));
-});
-
-app.listen(PORT, function () {
-  console.log('Tile server is listening on port ' + PORT);
 });
 
 function generateTile(x,y,z) {
