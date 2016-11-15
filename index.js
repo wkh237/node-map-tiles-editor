@@ -2,6 +2,9 @@ var express = require('express');
 var Canvas = require('canvas');
 var Image = Canvas.Image;
 var app = express();
+var moment = require('moment');
+
+var regions = JSON.parse(require('fs').readFileSync('./regions.json'));
 
 app.set('port', (process.env.PORT || 5000));
 
@@ -17,6 +20,46 @@ app.get('/tiles/:z/:x/:y', function (req, res) {
   console.log('make tile: ', x, y, z);
   res.type('image/png').send(generateTile(x,y,z));
 });
+
+app.get('/exps/:id', function(req, res) {
+  res.send(dummyExperience(req.params.id));
+});
+
+app.get('/pins', function(req, res) {
+  res.send(regions.pins);
+});
+
+app.get('/pins/:id', function(req, res) {
+  res.send(pins[req.params.id]);
+});
+
+function dummyExperience(id) {
+  var type = Math.random() > 0.8 ? 'label' : 'link';
+  if(type === 'link') {
+    var expired = Math.random() > 0.6;
+    var image = Math.floor((Math.random() - 0.01) * 4);
+
+    return {
+      exp_id :  'Experience #' + id,
+      label : 'Experience #' + id,
+      state : expired ? 'expired' : 'current',
+      start : expired ? '2016/11/08 14:30:00' : moment(Date.now() - 3600000 * Math.random()*2).format('YYYY/MM/DD HH:mm:ss'),
+      end : expired ? '2016/11/08 15:00:00' : moment(Date.now() + 3600000 * Math.random()*5).format('YYYY/MM/DD HH:mm:ss'),
+      hero_photo : 'public/event-bg' + image + '.png',
+      content : 'this is the text description',
+      pin_id : null
+    };
+  }
+  else {
+    return {
+      exp_id : 'Experience #' + id,
+      label : 'Label only',
+      content : 'this is the text description',
+      pin_id : null
+    };
+  }
+};
+
 
 function generateTile(x,y,z) {
 
