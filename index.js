@@ -29,7 +29,15 @@ app.get('/dummy-tiles/:region/:z/:x/:y', function (req, res) {
   res.type('image/png').send(generateTile(x,y,z));
 });
 
-app.get('/tiles/:region/:z/:x/:y/:debug', function (req, res) {
+app.get('/tiles/debug/:region/:z/:x/:y/', handleTileRequestDebug);
+app.get('/tiles/:region/:z/:x/:y/', handleTileRequest);
+
+function handleTileRequestDebug(req, res) {
+  req.params.debug = true;
+  handleTileRequest(req,res);
+}
+
+function handleTileRequest(req, res) {
   var {x, y, z, region, debug} = req.params;
   console.log(`make tile: ${region}/${z}/${x}/${y}`);
   let tilePath = `./tiles/${region}/${z}/${x}/${y}`;
@@ -41,13 +49,12 @@ app.get('/tiles/:region/:z/:x/:y/:debug', function (req, res) {
       })
     }
     else {
-      createTileFromRawImage(region, x, y, z, debug === undefined, function(bytes) {
+      createTileFromRawImage(region, x, y, z, debug, function(bytes) {
         res.type('image/png').send(bytes);
       });
     }
-  })
-  // res.type('image/png').send(generateTile(x,y,z));
-});
+  });
+}
 
 app.get('/exps/:id', function(req, res) {
   res.send(dummyExperience(req.params.id));
@@ -100,8 +107,9 @@ function tileToLat(y,z) {
     return (180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))));
 }
 
-function createTileFromRawImage(region, x, y, z, debug,cb) {
+function createTileFromRawImage(region, x, y, z, debug, cb) {
   console.log('create tile :', region, x, y, z)
+  console.log('debug=',debug)
   x = Math.floor(x);
   y = Math.floor(y);
   z = Math.floor(z);
@@ -131,14 +139,28 @@ function createTileFromRawImage(region, x, y, z, debug,cb) {
           tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat)/regionHeight * img.height;
       console.log(`tileWidth=${tileWidth}, tileHeight=${tileHeight}`);
       let tileImg = new Canvas(256, 256);
-      let originX = Math.abs(Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
-      let originY = Math.abs(Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
+      let originX = (Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
+      let originY = (Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
       let ctx = tileImg.getContext('2d');
-      console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`)
-      if(debug) {
-        ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+
+      if(originX > img.width || originY > img.height || originX + tileWidth > img.width || originY + tileHeight > img.height || originY < 0 || originX < 0) {
+        ctx.rect(0, 0, 256, 256);
+        ctx.fillStyle = '#F0F0F0';
+        ctx.fill();
+        ctx.fillStyle = '#777';
+        ctx.font = '16px Arial';
+        ctx.fillText('OUT OF BOUND', 128, 128);
+
       }
-      drawText(ctx,{region, x,y,z}, originX,originY,tileWidth, tileHeight, z);
+      else {
+        console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`);
+        ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+        if(debug) {
+          drawText(ctx,{region, x,y,z}, originX,originY,tileWidth, tileHeight, z);
+        }
+        ctx.strokeRect(0, 0, 256, 256);
+        ctx.fillStyle = '#DDD';
+      }
       var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
       cb(bytes);
 
