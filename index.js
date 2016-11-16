@@ -29,8 +29,8 @@ app.get('/dummy-tiles/:region/:z/:x/:y', function (req, res) {
   res.type('image/png').send(generateTile(x,y,z));
 });
 
-app.get('/tiles/:region/:z/:x/:y', function (req, res) {
-  var {x, y, z, region} = req.params;
+app.get('/tiles/:region/:z/:x/:y/:debug', function (req, res) {
+  var {x, y, z, region, debug} = req.params;
   console.log(`make tile: ${region}/${z}/${x}/${y}`);
   let tilePath = `./tiles/${region}/${z}/${x}/${y}`;
   fs.exists(tilePath, (ext) => {
@@ -41,7 +41,7 @@ app.get('/tiles/:region/:z/:x/:y', function (req, res) {
       })
     }
     else {
-      createTileFromRawImage(region, x, y, z, function(bytes) {
+      createTileFromRawImage(region, x, y, z, debug === undefined, function(bytes) {
         res.type('image/png').send(bytes);
       });
     }
@@ -100,7 +100,7 @@ function tileToLat(y,z) {
     return (180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))));
 }
 
-function createTileFromRawImage(region, x, y, z, cb) {
+function createTileFromRawImage(region, x, y, z, debug,cb) {
   console.log('create tile :', region, x, y, z)
   x = Math.floor(x);
   y = Math.floor(y);
@@ -135,7 +135,9 @@ function createTileFromRawImage(region, x, y, z, cb) {
       let originY = Math.abs(Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
       let ctx = tileImg.getContext('2d');
       console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`)
-      ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+      if(debug) {
+        ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+      }
       drawText(ctx,{region, x,y,z}, originX,originY,tileWidth, tileHeight, z);
       var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
       cb(bytes);
