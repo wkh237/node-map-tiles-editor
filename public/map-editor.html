@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Polygon Arrays</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+
+      }
+      #map {
+        width: 75%;
+        height: 100vh;
+        display: inline-block;
+      }
+      #tool {
+        display: inline-block;
+        width: 24%;
+        vertical-align: top;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="tool">
+      <div id="draw-region" class="btn">Draw</div>
+    </div>
+  </body>
+  <script>
+  function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 12,
+      center: {lat: -33.4486095, lng: 149.5558751},
+      mapTypeId: google.maps.MapTypeId.TERRAIN
+    });
+  }
+  </script>
+  <script src="app.js" charset="utf-8"></script>
+  <script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAUk8DEJj1B2efER6W3pLBUyMwthTiumUo&signed_in=true&callback=initMap"></script>
+
+</html>

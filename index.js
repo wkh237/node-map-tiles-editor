@@ -3,6 +3,8 @@ var Canvas = require('canvas');
 var Image = Canvas.Image;
 var app = express();
 var moment = require('moment');
+var fs = require('fs');
+var util = require('util');
 
 var regions = JSON.parse(require('fs').readFileSync('./regions.json'));
 
@@ -13,12 +15,38 @@ app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
 
-app.get('/tiles/:z/:x/:y', function (req, res) {
+app.get('/lookup/:z/:x/:y', function(req, res) {
   var x = req.params.x,
       y = req.params.y,
       z = req.params.z;
-  console.log('make tile: ', x, y, z);
+  res.send(tileToLatLng(x,y,z));
+
+});
+
+app.get('/dummy-tiles/:region/:z/:x/:y', function (req, res) {
+  var {x, y, z, region} = req.params;
+  console.log('dummy tile: ', region, x, y, z);
   res.type('image/png').send(generateTile(x,y,z));
+});
+
+app.get('/tiles/:region/:z/:x/:y', function (req, res) {
+  var {x, y, z, region} = req.params;
+  console.log(`make tile: ${region}/${z}/${x}/${y}`);
+  let tilePath = `./tiles/${region}/${z}/${x}/${y}`;
+  fs.exists(tilePath, (ext) => {
+
+    if(ext) {
+      fs.readFile(tilePath, (err, data) => {
+        res.type('image/png').send(data);
+      })
+    }
+    else {
+      createTileFromRawImage(region, x, y, z, function(bytes) {
+        res.type('image/png').send(bytes);
+      });
+    }
+  })
+  // res.type('image/png').send(generateTile(x,y,z));
 });
 
 app.get('/exps/:id', function(req, res) {
@@ -60,6 +88,76 @@ function dummyExperience(id) {
   }
 };
 
+function tileToLatLng(x,y,z) {
+  let result = { lat : tileToLat(y,z), lng : tileToLong(x,z) };;
+  return result;
+}
+
+function tileToLong(x,z) { return (x/Math.pow(2,z)*360-180); }
+
+function tileToLat(y,z) {
+    var n = Math.PI-2*Math.PI*y/Math.pow(2,z);
+    return (180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))));
+}
+
+function createTileFromRawImage(region, x, y, z, cb) {
+  console.log('create tile :', region, x, y, z)
+  x = Math.floor(x);
+  y = Math.floor(y);
+  z = Math.floor(z);
+  let bounds = fs.readFile(`./regions/${region}.json`, (err, data) => {
+
+    let {bounds} = JSON.parse(data);
+    let tileBounds = [
+      tileToLatLng(x,y,z),
+      tileToLatLng(x+1,y,z),
+      tileToLatLng(x+1,y+1,z),
+      tileToLatLng(x,y+1,z)
+    ];
+    fs.readFile(`./region-raw-img/${region}.png`, (err, data) => {
+      if(err)
+        throw err;
+      let img = new Image;
+      img.src = data;
+      console.log(data.length)
+      console.log(img.width, 'x', img.height)
+      console.log(util.inspect(img, false, null))
+      console.log('mag bounds:',bounds);
+      console.log('tile bounds:', tileBounds);
+      let regionWidth = Math.abs(Math.abs(bounds[0].lng) - Math.abs(bounds[1].lng)),
+          regionHeight = Math.abs(Math.abs(bounds[1].lat) - Math.abs(bounds[2].lat));
+      console.log(`regionWidth=${regionWidth}, regionHeight=${regionHeight}`);
+      let tileWidth = Math.abs(tileBounds[0].lng - tileBounds[1].lng)/regionWidth * img.width,
+          tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat)/regionHeight * img.height;
+      console.log(`tileWidth=${tileWidth}, tileHeight=${tileHeight}`);
+      let tileImg = new Canvas(256, 256);
+      let originX = Math.abs(Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
+      let originY = Math.abs(Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
+      let ctx = tileImg.getContext('2d');
+      console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`)
+      ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+      drawText(ctx,{region, x,y,z}, originX,originY,tileWidth, tileHeight, z);
+      var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
+      cb(bytes);
+
+    });
+
+  });
+}
+
+function drawText(ctx,param, ox,oy, dx, dy, z) {
+  var {region,x,y,z} = param;
+  var info = `${region}: ${z}/${x}/${y}`;
+  var coords = 'from (' + [Math.round(ox), Math.floor(oy)].join(', ') + ')';
+  var coords2 = 'to (' + [Math.round(ox+dx), Math.floor(oy + dy)].join(', ') + ')';
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#DDD';
+  ctx.fillText(info, 8, 24);
+  ctx.fillText(coords, 8, 48);
+  ctx.fillText(coords2, 8, 64);
+  ctx.font = '64px Arial';
+  ctx.fillText(z + 'x', 144, 255);
+}
 
 function generateTile(x,y,z) {
 
