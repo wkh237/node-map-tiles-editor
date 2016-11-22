@@ -150,7 +150,8 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
         ctx.fillStyle = '#777';
         ctx.font = '16px Arial';
         ctx.fillText('OUT OF BOUND', 128, 128);
-
+        cb([])
+        return
       }
       else {
         console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`);

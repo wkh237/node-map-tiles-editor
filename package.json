@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "A node server generates dummy map tiles",
   "engines": {
-    "node": "5.9.1"
+    "node": "7.1.0"
   },
   "main": "index.js",
   "scripts": {
@@ -16,7 +16,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/heroku/node-js-getting-started"
   },
   "keywords": [
     "node",
