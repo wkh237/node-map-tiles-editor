@@ -5,6 +5,8 @@ var app = express();
 var moment = require('moment');
 var fs = require('fs');
 var util = require('util');
+var mkdirp = require('mkdirp');
+var getDirName = require('path').dirname;
 
 var regions = JSON.parse(require('fs').readFileSync('./regions.json'));
 
@@ -40,16 +42,18 @@ function handleTileRequestDebug(req, res) {
 function handleTileRequest(req, res) {
   var {x, y, z, region, debug} = req.params;
   console.log(`make tile: ${region}/${z}/${x}/${y}`);
-  let tilePath = `./tiles/${region}/${z}/${x}/${y}`;
+  let tilePath = `./regions/${region}/${debug ? 'debug/' : ''}${z}/${x}${y}.png`;
   fs.exists(tilePath, (ext) => {
 
     if(ext) {
+      console.log('found tile', tilePath);
       fs.readFile(tilePath, (err, data) => {
         res.type('image/png').send(data);
-      })
+      });
     }
     else {
       createTileFromRawImage(region, x, y, z, debug, function(bytes) {
+        console.log('send tile')
         res.type('image/png').send(bytes);
       });
     }
@@ -135,25 +139,31 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
       let regionWidth = Math.abs(Math.abs(bounds[0].lng) - Math.abs(bounds[1].lng)),
           regionHeight = Math.abs(Math.abs(bounds[1].lat) - Math.abs(bounds[2].lat));
       console.log(`regionWidth=${regionWidth}, regionHeight=${regionHeight}`);
-      let tileWidth = Math.abs(tileBounds[0].lng - tileBounds[1].lng)/regionWidth * img.width,
-          tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat)/regionHeight * img.height;
+      let tileWidth = Math.abs(tileBounds[0].lng - tileBounds[1].lng) * img.width /regionWidth,
+          tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat) * img.height /regionHeight;
       console.log(`tileWidth=${tileWidth}, tileHeight=${tileHeight}`);
       let tileImg = new Canvas(256, 256);
       let originX = (Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
       let originY = (Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
       let ctx = tileImg.getContext('2d');
 
-      if(originX > img.width || originY > img.height || originX + tileWidth > img.width || originY + tileHeight > img.height || originY < 0 || originX < 0) {
+      if( originX > img.width + tileWidth ||
+          originY > img.height + tileHeight ||
+          originY < -tileHeight -1 || originX < -tileWidth -1 ) {
+        console.log('OUTBOUND')
         ctx.rect(0, 0, 256, 256);
         ctx.fillStyle = '#F0F0F0';
         ctx.fill();
         ctx.fillStyle = '#777';
         ctx.font = '16px Arial';
         ctx.fillText('OUT OF BOUND', 128, 128);
+        var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
         cb([])
         return
       }
       else {
+
+        console.log(`fill size (${tileWidth}, ${tileHeight})`);
         console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`);
         ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
         if(debug) {
@@ -162,8 +172,19 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
         ctx.strokeRect(0, 0, 256, 256);
         ctx.fillStyle = '#DDD';
       }
+
       var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
-      cb(bytes);
+      console.log('size', bytes.length);
+      var dir = `./regions/${region}/${debug ? 'debug/' : ''}${z}/${x}${y}.png`;
+      mkdirp(getDirName(dir), function (err) {
+        if (err)
+          console.log(err);
+        fs.writeFile(dir, bytes, function(err) {
+          if(err)
+          console.log(err)
+          cb(bytes);
+        });
+      });
 
     });
 
