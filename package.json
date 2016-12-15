@@ -10,10 +10,12 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "body-parser": "^1.15.2",
     "canvas": "^1.6.1",
     "express": "4.13.3",
     "mkdirp": "^0.5.1",
-    "moment": "^2.16.0"
+    "moment": "^2.16.0",
+    "request": "^2.79.0"
   },
   "repository": {
     "type": "git"

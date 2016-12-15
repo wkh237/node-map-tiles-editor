@@ -7,15 +7,70 @@ var fs = require('fs');
 var util = require('util');
 var mkdirp = require('mkdirp');
 var getDirName = require('path').dirname;
+var enableCache = true;
+var cp = require('child_process').exec;
+var bodyParser = require('body-parser');
+var imgCache = {};
 
 var regions = JSON.parse(require('fs').readFileSync('./regions.json'));
 
 app.set('port', (process.env.PORT || 5000));
 
 app.use('/public', express.static('public'));
+
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json());
+
 app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
+
+app.post('/bounds/:region', function(req, res) {
+  var region = req.params.region;
+  console.log(region,req.body)
+  try {
+    fs.writeFileSync('./regions/'+region+'.json', JSON.stringify(req.body));
+  }catch(err) {
+    console.log(err.stack);
+  }
+  res.sendStatus(200);
+})
+
+app.get('/bounds/:region', function(req, res) {
+
+  var region = req.params.region;
+  try {
+    var data = fs.readFileSync('./regions/' + region + '.json');
+    res.send(data);
+  } catch(err) {
+    console.log(err.stack);
+  }
+
+})
+
+app.get('/reset-cache/:region', function(req,res) {
+
+  var region = req.params.region;
+  try {
+    deleteFolderRecursive('./regions/'+region+'/debug/', function() {
+      res.send(200)
+    });
+  } catch(err) {
+    console.log(err.stack);
+  }
+
+})
+
+app.get('/cache/:enable', function(req, res) {
+
+  if(req.params.enable == '1') {
+    enableCache = true;
+  }
+  else
+    enableCache = false;
+  res.send(200);
+
+})
 
 app.get('/lookup/:z/:x/:y', function(req, res) {
   var x = req.params.x,
@@ -59,6 +114,24 @@ function handleTileRequest(req, res) {
     }
   });
 }
+
+app.get('/base/:z/:x/:y', function(req,res) {
+  var request   = require('request');
+  var x = req.params.x;
+  var y = req.params.y;
+  var z = req.params.z;
+  var pipe      = req.pipe(request.post('http://mt1.google.com/vt/lyrs=m@110&hl=pl&x='+x+'&y='+y+'&z='+ z));
+  var response  = [];
+
+  pipe.on('data',function(chunk) {
+    response.push(chunk);
+  });
+
+  pipe.on('end',function() {
+    var res2 = Buffer.concat(response);
+    res.send(res2);
+  });
+})
 
 app.get('/exps/:id', function(req, res) {
   res.send(dummyExperience(req.params.id));
@@ -126,7 +199,14 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
       tileToLatLng(x+1,y+1,z),
       tileToLatLng(x,y+1,z)
     ];
-    fs.readFile(`./region-raw-img/${region}.png`, (err, data) => {
+    if(imgCache[region]) {
+      render(null, imgCache);
+    }
+    else {
+      fs.readFile(`./region-raw-img/${region}.png`, render);
+    }
+
+    function render(err, data) {
       if(err)
         throw err;
       let img = new Image;
@@ -179,16 +259,24 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
       mkdirp(getDirName(dir), function (err) {
         if (err)
           console.log(err);
-        fs.writeFile(dir, bytes, function(err) {
-          if(err)
-          console.log(err)
+
+        if(enableCache) {
+          fs.writeFile(dir, bytes, function(err) {
+            if(err)
+            console.log(err)
+            cb(bytes);
+          });
+        }
+        else {
           cb(bytes);
-        });
+        }
+
       });
 
-    });
+    }
 
   });
+
 }
 
 function drawText(ctx,param, ox,oy, dx, dy, z) {
@@ -225,3 +313,18 @@ function generateTile(x,y,z) {
   var bytes = canvas.toBuffer(undefined, 3, canvas.PNG_FILTER_NONE);
   return bytes;
 }
+
+var deleteFolderRecursive = function(path, cb) {
+  if( fs.existsSync(path) ) {
+    fs.readdirSync(path).forEach(function(file,index){
+      var curPath = path + "/" + file;
+      if(fs.lstatSync(curPath).isDirectory()) { // recurse
+        deleteFolderRecursive(curPath);
+      } else { // delete file
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(path);
+  }
+  cb()
+};

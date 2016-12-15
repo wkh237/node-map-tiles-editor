@@ -1,0 +1,31 @@
+html, body {
+  margin: 0;
+  padding: 0;
+
+}
+#map {
+  width: 75%;
+  height: 100vh;
+  display: inline-block;
+}
+#tool {
+  display: inline-block;
+  width: 24%;
+  vertical-align: top;
+}
+#viewer-panel {
+  margin : 1rem;
+  display: block;
+}
+.tile-wrapper {
+  position: relative;
+  display:inline-block;
+  height : 128px;
+  width:128px;
+}
+
+.overlay-tile {
+  position:  absolute;
+  top : 0;
+  left : 0;
+}

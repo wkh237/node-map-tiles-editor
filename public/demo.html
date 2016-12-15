@@ -3,27 +3,37 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>test</title>
+    <title>Tiles Demo</title>
+    <link rel="stylesheet" href="/public/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="viewer.js" charset="utf-8"></script>
   </head>
-
   <body>
-    <div>
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3749/2450" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3750/2450" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3751/2450" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3752/2450" alt="">
+    <div id="viewer-panel">
+      <p>Origin</p>
+      <input id="region" type="text" placeholder="region" value="clipsal-500-adelaide"/>
+      <input id="coords" type="text" placeholder="z,x,y" value="17,116005,79122"/>
+      <input id="width" type="text" placeholder="width" value="3"/> x
+      <input id="height" type="text" placeholder="height" value="3"/>
+      <button id="render-btn">render</button>
+      <div>
+        <p>Top left</p>
+        <input id="ub-lat" type="text" placeholder="lat"/>
+        <input id="ub-lng" type="text" placeholder="lng"/>
+        <button class="update-btn">update</button>
+      </div>
+      <div>
+        <p>Bottom right</p>
+        <input id="lb-lat" type="text" placeholder="lat"/>
+        <input id="lb-lng" type="text" placeholder="lng"/>
+        <button class="update-btn">update</button>
+      </div>
     </div>
-    <div>
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3749/2451" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3750/2451" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3751/2451" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3752/2451" alt="">
-    </div>
-    <div>
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3749/2452" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3750/2452" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3751/2452" alt="">
-      <img src="http://192.168.0.11:5000/tiles/debug/test-region1/12/3752/2452" alt="">
+    <button class="move" x="0" y="-1">↑</button>
+    <button class="move" x="-1" y="0">←</button>
+    <button class="move" x="1" y="0">→</button>
+    <button class="move" x="0" y="1">↓</button>
+    <div id="tiles">
     </div>
   </body>
 </html>
