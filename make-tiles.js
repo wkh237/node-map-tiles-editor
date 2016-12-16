@@ -37,17 +37,21 @@ for(var i = min; i <= max ; i++) {
 }
 console.log('tiles needs to be generated :', total);
 var now = 0;
+var start = Date.now();
 for(var i=min;i<=max;i++) {
   var lt = getTileAtLatLng(val[0], i);
   var rb = getTileAtLatLng(val[2], i);
   for(var j = lt.x; j < rb.x;j++){
     for(var k=lt.y; k < rb.y;k++) {
       createTileFromRawImage(regionName, j,k,i, function() {
+        now++;
+        var time = Math.floor((total-now)*((Date.now() - start)/now)/1000);
+        process.stdout.write('Processing .. ' +  (now) + '/' + total + ' --> ' + (now/total*100).toFixed(2) + '% [' +time + '] seconds remains    \033[0G' );
       });
     }
   }
-
 }
+console.log('Task finished,', Math.floor((Date.now() - start)/1000), 'seconds elapsed                                                    ');
 
 function tileToLatLng(x,y,z) {
   var result = { lat : tileToLat(y,z), lng : tileToLong(x,z) };;
@@ -65,71 +69,48 @@ function createTileFromRawImage(region, x, y, z, cb) {
   x = Math.floor(x);
   y = Math.floor(y);
   z = Math.floor(z);
-  let bounds = fs.readFile(`./regions/${region}.json`, (err, data) => {
+  let data = fs.readFileSync(`./regions/${region}.json`);
 
-    let {bounds} = JSON.parse(data);
-    let tileBounds = [
-      tileToLatLng(x,y,z),
-      tileToLatLng(x+1,y,z),
-      tileToLatLng(x+1,y+1,z),
-      tileToLatLng(x,y+1,z)
-    ];
-    if(imageCache[region]) {
-      render(null, imageCache[region]);
-    }
-    else {
-      fs.readFile(`./region-raw-img/${region}.png`, render);
-    }
+  let {bounds} = JSON.parse(data);
+  let tileBounds = [
+    tileToLatLng(x,y,z),
+    tileToLatLng(x+1,y,z),
+    tileToLatLng(x+1,y+1,z),
+    tileToLatLng(x,y+1,z)
+  ];
 
-    function render(err, data) {
-      if(!imageCache[region] )
-        imageCache[region] = data;
-      if(err)
-        throw err;
-      let img = new Image;
-      img.src = data;
+  var raw = imageCache[region] ? imageCache[region] : fs.readFileSync(`./region-raw-img/${region}.png`);
+  let img = new Image;
+  img.src = raw;
 
-      let regionWidth = Math.abs(Math.abs(bounds[0].lng) - Math.abs(bounds[1].lng)),
-          regionHeight = Math.abs(Math.abs(bounds[1].lat) - Math.abs(bounds[2].lat));
+  let regionWidth = Math.abs(Math.abs(bounds[0].lng) - Math.abs(bounds[1].lng)),
+      regionHeight = Math.abs(Math.abs(bounds[1].lat) - Math.abs(bounds[2].lat));
 
-      let tileWidth = Math.abs(tileBounds[0].lng - tileBounds[1].lng) * img.width /regionWidth,
-          tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat) * img.height /regionHeight;
+  let tileWidth = Math.abs(tileBounds[0].lng - tileBounds[1].lng) * img.width /regionWidth,
+      tileHeight = Math.abs(tileBounds[1].lat - tileBounds[2].lat) * img.height /regionHeight;
 
-      let tileImg = new Canvas(256, 256);
-      let originX = (Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
-      let originY = (Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
-      let ctx = tileImg.getContext('2d');
+  let tileImg = new Canvas(256, 256);
+  let originX = (Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
+  let originY = (Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
+  let ctx = tileImg.getContext('2d');
 
-      if( originX > img.width + tileWidth ||
-          originY > img.height + tileHeight ||
-          originY < -tileHeight -1 || originX < -tileWidth -1 ) {
-        return
-      }
-      else {
-        ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
-        ctx.strokeStyle = 'transparent';
-        ctx.strokeRect(0, 0, 256, 256);
-      }
+  if( originX > img.width + tileWidth ||
+      originY > img.height + tileHeight ||
+      originY < -tileHeight -1 || originX < -tileWidth -1 ) {
+    return
+  }
+  else {
+    ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
+    ctx.strokeStyle = 'transparent';
+    ctx.strokeRect(0, 0, 256, 256);
+  }
 
-      var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
+  var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
 
-      var dir = `./regions/${region}/${z}/${x}${y}.png`;
-      mkdirp(getDirName(dir), function (err) {
-        if (err)
-          console.log(err);
-
-        fs.writeFile(dir, bytes, function(err) {
-          if(err)
-          console.log(err)
-          console.log('remaining tiles', --total);
-          cb();
-        });
-
-      });
-
-    }
-
-  });
+  var dir = `./regions/${region}/${z}/${x}${y}.png`;
+  mkdirp.sync(getDirName(dir));
+  fs.writeFileSync(dir, bytes);
+  cb();
 
 }
 
