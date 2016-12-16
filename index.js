@@ -7,12 +7,10 @@ var fs = require('fs');
 var util = require('util');
 var mkdirp = require('mkdirp');
 var getDirName = require('path').dirname;
-var enableCache = true;
+var enableCache = false;
 var cp = require('child_process').exec;
 var bodyParser = require('body-parser');
 var imgCache = {};
-
-var regions = JSON.parse(require('fs').readFileSync('./regions.json'));
 
 app.set('port', (process.env.PORT || 5000));
 
@@ -24,6 +22,31 @@ app.use(bodyParser.json());
 app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
+
+app.get('/regions', function(req, res) {
+
+  try {
+    var regions = fs.readdir('./regions/', function(err, files) {
+      console.log(files)
+      var results = [];
+      for(var i in files) {
+        if(/\.json$/i.test(files[i])) {
+          var meta = './regions/'+files[i];
+          console.log('read region meta :', meta);
+          var region = JSON.parse(fs.readFileSync(meta));
+          region.name = String(files[i]).replace(/\.json$/i,'');
+          results.push(region);
+        }
+      }
+      res.send(results);
+    })
+
+    // res.send(files)
+  }catch(err) {
+    console.log(err.stack);
+  }
+
+})
 
 app.post('/bounds/:region', function(req, res) {
   var region = req.params.region;
@@ -234,7 +257,7 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
         ctx.rect(0, 0, 256, 256);
         ctx.fillStyle = '#F0F0F0';
         ctx.fill();
-        ctx.fillStyle = '#777';
+        ctx.fillStyle = '#222';
         ctx.font = '16px Arial';
         ctx.fillText('OUT OF BOUND', 128, 128);
         var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
@@ -285,7 +308,7 @@ function drawText(ctx,param, ox,oy, dx, dy, z) {
   var coords = 'from (' + [Math.round(ox), Math.floor(oy)].join(', ') + ')';
   var coords2 = 'to (' + [Math.round(ox+dx), Math.floor(oy + dy)].join(', ') + ')';
   ctx.font = '16px Arial';
-  ctx.fillStyle = '#DDD';
+  ctx.fillStyle = '#333';
   ctx.fillText(info, 8, 24);
   ctx.fillText(coords, 8, 48);
   ctx.fillText(coords2, 8, 64);
@@ -302,7 +325,7 @@ function generateTile(x,y,z) {
   ctx.rect(0, 0, 256, 256);
   ctx.fillStyle = '#F0F0F0';
   ctx.fill();
-  ctx.fillStyle = '#777';
+  ctx.fillStyle = '#333';
   ctx.font = '16px Arial';
   ctx.fillText(coords, 24, 64);
   ctx.strokeStyle = 'white';

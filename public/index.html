@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Editor</title>
+    <link rel="stylesheet" href="/public/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div class="row">
+        <!-- map view -->
+        <div class="row" >
+          <p>Regions</p>
+          <select v-model="selectedRegion">
+            <option v-for="r in regions" v-bind:value="r.name">
+              {{ r.name }}
+            </option>
+          </select>
+          <div class="row">
+            <button v-on:click="regionZoom+=1">+</button>
+            <p id="region-z">Zoom x {{ regionZoom }}</p>
+            <button v-on:click="regionZoom-=1">-</button>
+          </div>
+          <div class="row">
+            <p>Latitude</p>
+            <input v-model="regionCenter.lat"/>
+          </div>
+          <div class="row">
+            <p>Longitude</p>
+            <input v-model="regionCenter.lng"/>
+          </div>
+          <div id="map"></div>
+        </div>
+        <!-- tiles test view -->
+        <div id="viewer-panel">
+          <textarea name="name" rows="6" cols="80" v-model="json"></textarea>
+          <p>Origin</p>
+          <div class="row">
+            name&nbsp;<input type="text" placeholder="region" v-model="selectedRegion"/>
+            TMS coord&nbsp;<input type="text" placeholder="z,x,y" v-model="viewerTMSCoord"/>
+          </div>
+          <div class="row">
+            <input type="text" placeholder="width" v-model="viewerWidth"/> x
+            <input type="text" placeholder="height" v-model="viewerHeight"/>
+            <button v-on:click="renderViewer">render</button>
+          </div>
+          <div>
+            <p>Top left</p>
+            <input type="number" placeholder="lat" v-model="selectedBounds[0].lat"/>
+            <input type="number" placeholder="lng" v-model="selectedBounds[0].lng"/>
+            <button v-on:click="updateRegionBounds">update</button>
+          </div>
+          <div>
+            <p>Bottom right</p>
+            <input type="number" placeholder="lat" v-model="selectedBounds[2].lat"/>
+            <input type="number" placeholder="lng" v-model="selectedBounds[2].lng"/>
+            <button v-on:click="updateRegionBounds">update</button>
+          </div>
+          <button v-on:click="viewerMove(0,-1,0)">↑</button>
+          <button v-on:click="viewerMove(-1,0,0)">←</button>
+          <button v-on:click="viewerMove(0,0,1)">+</button>
+          <button v-on:click="viewerMove(0,0,-1)">-</button>
+          <button v-on:click="viewerMove(1,0,0)">→</button>
+          <button v-on:click="viewerMove(0,1,0)">↓</button>
+          <!-- render tiles -->
+          <div>
+            <div v-for="row in tiles" style="line-height:0">
+              <div class="tile-wrapper" v-for="tile in row">
+                <img
+                  class="overlay-tile"
+                  class="overlay-tile"
+                  height="128"
+                  width="128"
+                  v-bind:src="tile.base"/>
+                  <img
+                    class="overlay-tile"
+                    class="overlay-tile"
+                    height="128"
+                    width="128"
+                    v-bind:src="tile.src"/>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- tile stat -->
+        <div id="tile-stat">
+          <p>Tiles Generation Configs</p>
+          <div class="row">
+            <p>Zoom</p>
+            <input type="number" v-model="config.zoomMin" v-on:change="stat"/> ~
+            <input type="number" v-model="config.zoomMax" v-on:change="stat"/>
+            <!-- list -->
+          </div>
+          <div v-for="s in config.ranges">
+            {{s.zoom}}X ({{s.lt.x}}~{{s.rb.x}}, {{s.lt.y}}~{{s.rb.y}}) {{s.width}}x{{s.height}}, {{ s.number }} tiles
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+  <script src="https://unpkg.com/vue/dist/vue.js"></script>
+  <script src="app.js" charset="utf-8"></script>
+  <script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAUk8DEJj1B2efER6W3pLBUyMwthTiumUo&signed_in=true&callback=initMap"></script>
+</html>

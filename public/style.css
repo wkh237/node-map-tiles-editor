@@ -1,5 +1,6 @@
 html, body {
-  margin: 0;
+  margin: 1rem;
+  text-align: center;
   padding: 0;
 
 }
@@ -23,9 +24,11 @@ html, body {
   height : 128px;
   width:128px;
 }
-
 .overlay-tile {
   position:  absolute;
   top : 0;
   left : 0;
+}
+.row > * {
+  display: inline-block;
 }

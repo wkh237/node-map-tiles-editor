@@ -1,170 +1,309 @@
-var regions = [[
-    // north west
-    {lat: -33.3686095, lng: 149.7558751},
-    // north east
-    {lat: -33.3686095, lng: 149.3558751},
-    // south east
-    {lat: -33.5286095, lng: 149.3558751},
-    // south west
-    {lat: -33.5286095, lng: 149.7558751},
-]];
+var map = null;
+var markers = [];
+var rect = null;
+var app = new Vue({
+  el: '#app',
 
-$(function() {
+  // data context
 
-  console.log('initialize')
-  $('#draw-region').on('click',function() {
+  data: {
+    regions : [],
+    selectedRegion : null,
+    regionZoom : 15,
+    regionCenter : { lat : 0, lng : 0 },
+    viewerTMSCoord : '17,116005,79122',
+    viewerWidth : 3,
+    viewerHeight : 3,
+    tiles : [],
+    json : '',
+    selectedBounds : [{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0}],
+    config : {
+      zoomMin : 8,
+      zoomMax : 19,
+      ranges : []
+    },
+  },
 
-    drawRegion(regions[0])
-  });
+  // lifecycle
+
+  created : function() {
+    this.getRegions();
+  },
+
+  // watch prop changes
+
+  watch : {
+
+    selectedBounds : function(val) {
+      var json = { bounds: val };
+      app.json = JSON.stringify(json);
+      // get tms bounds for each zoom level
+      var min = app.config.zoomMin;
+      var max = app.config.zoomMax;
+      var ranges = [];
+      for(var i = min; i <= max ; i++) {
+        var lt = getTileAtLatLng(val[0], i);
+        var rb = getTileAtLatLng(val[2], i);
+        console.log(lt,rb,i)
+        ranges.push({
+          zoom : i,
+          lt : lt,
+          rb : rb,
+          width : Math.abs(rb.x-lt.x),
+          height : Math.abs(rb.y-lt.y),
+          number : Math.abs((rb.x-lt.x) * (rb.y-lt.y))
+        })
+      }
+      console.log(ranges);
+      app.config.ranges = ranges;
+    },
+
+    regionZoom : function(val) {
+      map.setZoom(val);
+    },
+
+    selectedRegion : function(key) {
+      console.log(key)
+      var region = null;
+      for(var i in app.regions) {
+        if(app.regions[i].name === key) {
+          region = app.regions[i];
+          break
+        }
+      }
+      console.log(region);
+      if(!region)
+        return;
+      var center = {
+        lat : ((+region.bounds[0].lat) + (+region.bounds[2].lat))/2,
+        lng : ((+region.bounds[0].lng) + (+region.bounds[2].lng))/2
+      };
+      map.setZoom(app.regionZoom);
+      map.setCenter(center);
+      $.get('/bounds/' + key, function(data) {
+        var bounds = JSON.parse(data);
+        console.log('bounds', bounds);
+        // clear rect and redraw
+        app.selectedBounds = bounds.bounds;
+        for(var i in markers) {
+          markers[i].setMap(null);
+        }
+        rect && rect.setMap(null);
+        var marker1 = new google.maps.Marker({
+                position: region.bounds[0],
+                label : 'LT',
+                map: map
+        });
+        var marker2 = new google.maps.Marker({
+                position: region.bounds[2],
+                label : 'RB',
+                map: map
+        });
+        markers = [marker1, marker2];
+        var rectBounds = {
+          north: Math.max(markers[0].position.lat(), markers[1].position.lat()),
+          south: Math.min(markers[0].position.lat(), markers[1].position.lat()),
+          east: Math.max(markers[0].position.lng(), markers[1].position.lng()),
+          west: Math.min(markers[0].position.lng(), markers[1].position.lng())
+        };
+        rect = new google.maps.Rectangle({
+          strokeOpacity: 0.8,
+          strokeWeight: 0,
+          fillColor: '#007dff',
+          fillOpacity: 0.35,
+          map: map,
+          bounds: rectBounds
+        });
+      });
+      app.regionCenter = center;
+    },
+
+  },
+
+  // methods
+
+  methods : {
+
+    stat : function() {
+      var json = { bounds: app.selectedBounds };
+      app.json = JSON.stringify(json);
+      // get tms bounds for each zoom level
+      var min = app.config.zoomMin;
+      var max = app.config.zoomMax;
+      var ranges = [];
+      for(var i = min; i <= max ; i++) {
+        var lt = getTileAtLatLng(app.selectedBounds[0], i);
+        var rb = getTileAtLatLng(app.selectedBounds[2], i);
+        console.log(lt,rb,i)
+        ranges.push({
+          zoom : i,
+          lt : lt,
+          rb : rb,
+          width : Math.abs(rb.x-lt.x),
+          height : Math.abs(rb.y-lt.y),
+          number : Math.abs((rb.x-lt.x) * (rb.y-lt.y))
+        })
+      }
+      console.log(ranges);
+      app.config.ranges = ranges;
+    },
+
+    getRegions : function() {
+       $.get('/regions', function(data) {
+         console.log(app.regions)
+         console.log('regions', data);
+         regions = data;
+         for(var i in data) {
+           var meta = data[i];
+           app.regions.push(meta)
+         }
+         console.log(app.regions);
+
+       });
+    },
+
+    renderViewer() {
+      var z = Math.floor(String(app.viewerTMSCoord).split(',')[0]);
+      var x = Math.floor(String(app.viewerTMSCoord).split(',')[1]);
+      var y = Math.floor(String(app.viewerTMSCoord).split(',')[2]);
+      var tiles = [];
+
+      for(var j = 0; j < app.viewerHeight; j++) {
+        var row = [];
+        for(var i = 0; i < app.viewerWidth; i++) {
+          row.push({
+            src : '/tiles/debug/' + app.selectedRegion + '/' + [z, x+i, y+j].join('/') + '?v='+Date.now(),
+            base : '/base/' + [z, x+i, y+j].join('/')
+          });
+        }
+        tiles.push(row);
+      }
+      app.tiles = tiles;
+      console.log('render tiles', tiles)
+    },
+
+    viewerMove (dx, dy, dz) {
+      var coords = String(app.viewerTMSCoord).split(',');
+      var x = Math.floor((+coords[1] + dx) * Math.pow(2, dz));
+      var z = (+coords[0]) + dz;
+      var y = Math.floor((+coords[2] + dy) * Math.pow(2, dz));
+      app.viewerTMSCoord = [z,x,y].join(',');
+      console.log('viewer move', dx, dy, dz,app.viewerTMSCoord)
+      app.renderViewer();
+    },
+
+    updateRegionBounds() {
+      var body = {};
+      body.bounds = app.selectedBounds;
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/bounds/'+ app.selectedRegion);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify(body));
+      console.log(app.selectedBounds);
+    }
+
+
+  },
+
 
 });
 
-function drawRegion(region) {
 
-  // Construct the polygon.
-  var bermudaTriangle = new google.maps.Polygon({
-    paths: region,
-    strokeColor: '#FF0000',
-    strokeOpacity: 0.8,
-    strokeWeight: 3,
-    fillColor: '#00000000',
-    fillOpacity: 0.35
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    zoom: 16,
+    center: {lat: -34.9270088, lng: 138.6089918},
+    mapTypeId: google.maps.MapTypeId.TERRAIN
   });
-  bermudaTriangle.setMap(map);
-
-  // Add a listener for the click event.
-  bermudaTriangle.addListener('click', showArrays);
-
-  infoWindow = new google.maps.InfoWindow;
-}
-
-/** @this {google.maps.Polygon} */
-function showArrays(event) {
-  // Since this polygon has only one path, we can call getPath() to return the
-  // MVCArray of LatLngs.
-  var vertices = this.getPath();
-
-  var contentString = '<b>region </b><br>' +
-      'Clicked location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() +
-      '<br>';
-
-  // Iterate over the vertices.
-  for (var i =0; i < vertices.getLength(); i++) {
-    var xy = vertices.getAt(i);
-    contentString += '<br>' + 'Coordinate ' + i + ':<br>' + xy.lat() + ',' +
-        xy.lng();
-  }
-
-  // Replace the info window's content and position.
-  infoWindow.setContent(contentString);
-  infoWindow.setPosition(event.latLng);
-
-  infoWindow.open(map);
-}
-
-function handleMap(map){
-    var getBounds = getFnDefineBounds();
-    var drawRect = getFnDrawRect();
-    map.addListener('click', function(event) {
-        bounds = getBounds({ lat: event.latLng.lat(), lng: event.latLng.lng() }, map);
-        drawRect(bounds);
+  map.addListener('click', function(event) {
+    if(markers.length > 1) {
+      for(var i in markers) {
+        markers[i].setMap(null);
+      }
+      markers = [];
+    }
+    var ll = {
+      lat: event.latLng.lat(),
+      lng: event.latLng.lng()
+    };
+    bounds = getBounds(ll, map);
+    var marker = new google.maps.Marker({
+            position: ll,
+            label : markers.length === 0 ? 'LT' : 'RB',
+            map: map
     });
+    var info = new google.maps.InfoWindow();
+    info.setContent('lat: ' + ll.lat + '<br>' + 'lng: ' + ll.lng);
+    info.open(map, marker);
+    markers.push(marker);
+    // draw rect
+    if(markers.length === 2) {
+      var bounds = {
+        north: Math.max(markers[0].position.lat(), markers[1].position.lat()),
+        south: Math.min(markers[0].position.lat(), markers[1].position.lat()),
+        east: Math.max(markers[0].position.lng(), markers[1].position.lng()),
+        west: Math.min(markers[0].position.lng(), markers[1].position.lng())
+      };
+      rect && rect.setMap(null);
+      rect = new google.maps.Rectangle({
+        strokeOpacity: 0.8,
+        strokeWeight: 0,
+        fillColor: '#007dff',
+        fillOpacity: 0.35,
+        map: map,
+        bounds: bounds
+      });
+      app.selectedBounds = [
+        { lat : bounds.west, lng : bounds.north  },
+        { lat : bounds.east, lng : bounds.north  },
+        { lat : bounds.east, lng : bounds.south  },
+        { lat : bounds.west, lng : bounds.south  },
+      ];
+      console.log('rectBounds', bounds)
+    }
+  });
 }
 
-function getFnDrawRect(){
-    var rect;
-    return function(bounds){
-        clearIfNeed();
-        if(bounds){
-            rect = new google.maps.Rectangle({
-                strokeColor: '#FF0000',
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillOpacity: 0,
-                map: map,
-                bounds: bounds
-            });
-        }
-    }
-    function clearIfNeed(){
-        if(rect){
-            rect.setMap(null);
-            rect = null;
-        }
-    }
+function fromLatLngToPoint (latLng){
+  var siny =  Math.min(Math.max(Math.sin(latLng.lat* (Math.PI / 180)), -.9999),.9999);
+  return {
+    x: 128 + latLng.lng * (256/360),
+    y: 128 + 0.5 * Math.log((1 + siny) / (1 - siny)) * -(256 / (2 * Math.PI))
+  };
 }
 
-function getFnDefineBounds(){
-    var count = 0;
-    var markerAry = [];
-    return function(location, map){
-        var oldMarker;
-        var newMarker = new google.maps.Marker({
-                position: location,
-                animation: google.maps.Animation.DROP,
-                map: map
-        });
+function getTileAtLatLng(latLng,zoom){
+  var t=Math.pow(2,zoom),
+      s=256/t,
+      p=this.fromLatLngToPoint(latLng);
+      return {x:Math.floor(p.x/s),y:Math.floor(p.y/s),z:zoom};
+}
 
-        if(count%2==0){
-            oldMarker = markerAry[0];
-            markerAry[0] = newMarker;
+function getBounds(markerAry){
+    if(markerAry && markerAry.length >1){
+        var n, s, w, e;
+        var lat = [];
+        lat[0] = markerAry[0].position.lat();
+        lat[1] = markerAry[1].position.lat();
+        if(Math.abs(lat[0]) < Math.abs(lat[1])){
+            n = lat[0];
+            s = lat[1];
         }
         else{
-            oldMarker = markerAry[1];
-            markerAry[1] = newMarker;
+            s = lat[0];
+            n = lat[1];
         }
-
-        clearIfNeed(oldMarker, infowindow);
-
-        var infowindow = new google.maps.InfoWindow();
-        infowindow.setContent('lat: ' + location.lat + '<br>' + 'lng: ' + location.lng);
-        infowindow.open(map, newMarker);
-
-        count++;
-
-        return getBounds(markerAry);
+        var lng = [];
+        lng[0] = markerAry[0].position.lng();
+        lng[1] = markerAry[1].position.lng();
+        if(Math.abs(lng[0]) < Math.abs(lng[1])){
+            w = lng[0];
+            e = lng[1];
+        }
+        else{
+            e = lng[0];
+            w = lng[1];
+        }
+        return {north: n, south: s, west: w, east: e};
     }
-    function clearIfNeed(oldMarker, infowindow){
-        if(infowindow){
-            infowindow.close();
-        }
-        if(oldMarker){
-            oldMarker.setMap(null);
-            oldMarker = null;
-        }
-    }
-    function getBounds(markerAry){
-        if(markerAry && markerAry.length >1){
-            var n, s, w, e;
-            var lat = [];
-            lat[0] = markerAry[0].position.lat();
-            lat[1] = markerAry[1].position.lat();
-            if(Math.abs(lat[0]) < Math.abs(lat[1])){
-                n = lat[0];
-                s = lat[1];
-            }
-            else{
-                s = lat[0];
-                n = lat[1];
-            }
-            var lng = [];
-            lng[0] = markerAry[0].position.lng();
-            lng[1] = markerAry[1].position.lng();
-            if(Math.abs(lng[0]) < Math.abs(lng[1])){
-                w = lng[0];
-                e = lng[1];
-            }
-            else{
-                e = lng[0];
-                w = lng[1];
-            }
-            return {north: n, south: s, west: w, east: e};
-        }
-    }
-}
-
-function extendBound(map, latLngLiteral){
-    var bounds = map.getBounds();
-    bounds.extend(latLngLiteral);
-    map.fitBounds(bounds);
 }
