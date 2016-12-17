@@ -1,19 +1,53 @@
 html, body {
-  margin: 1rem;
   text-align: center;
-  padding: 0;
+  margin : 0;
+}
 
+input, button, select {
+  border : 0;
+  background-color: #ededed;
+  padding : 8px;
+  margin : 4px;
+  min-width: 50px;
 }
+
 #map {
-  width: 75%;
-  height: 100vh;
-  display: inline-block;
+  width: 100%;
+  height: 80vh;
+  display: block;
 }
-#tool {
-  display: inline-block;
-  width: 24%;
-  vertical-align: top;
+#json {
+  border : 0;
+  width : 100%;
+  display: block;
+  font-size: 16px;
+  background-color: #ededed;
+  padding : 16px;
 }
+#nav {
+  height : 60px;
+}
+.table {
+  display: flex;
+  padding: 8px;
+  width: 100%;
+}
+.header {
+  background-color: #ededed;
+}
+.table > p {
+  flex: 1;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin : 0;
+  text-align: left;
+}
+.table > button {
+  flex: 1;
+  margin : 4px;
+  text-align: center;
+}
+
 #viewer-panel {
   margin : 1rem;
   display: block;

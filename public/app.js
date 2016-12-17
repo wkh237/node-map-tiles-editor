@@ -1,6 +1,7 @@
 var map = null;
 var markers = [];
 var rect = null;
+var overlay = null;
 var app = new Vue({
   el: '#app',
 
@@ -9,12 +10,15 @@ var app = new Vue({
   data: {
     regions : [],
     selectedRegion : null,
+    selectedImage : null,
     regionZoom : 15,
     regionCenter : { lat : 0, lng : 0 },
-    viewerTMSCoord : '17,116005,79122',
+    viewerTMSCoord : '',
     viewerWidth : 3,
     viewerHeight : 3,
     tiles : [],
+    images : [],
+    overlayURI : '',
     json : '',
     selectedBounds : [{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0}],
     config : {
@@ -28,15 +32,18 @@ var app = new Vue({
 
   created : function() {
     this.getRegions();
+    this.getImages();
   },
 
   // watch prop changes
 
   watch : {
 
+    overlayURI : function(val) {
+      updateRegionRectAndOverlay()
+    },
+
     selectedBounds : function(val) {
-      var json = { bounds: val };
-      app.json = JSON.stringify(json);
       // get tms bounds for each zoom level
       var min = app.config.zoomMin;
       var max = app.config.zoomMax;
@@ -44,7 +51,6 @@ var app = new Vue({
       for(var i = min; i <= max ; i++) {
         var lt = getTileAtLatLng(val[0], i);
         var rb = getTileAtLatLng(val[2], i);
-        console.log(lt,rb,i)
         ranges.push({
           zoom : i,
           lt : lt,
@@ -56,14 +62,12 @@ var app = new Vue({
       }
       console.log(ranges);
       app.config.ranges = ranges;
-    },
-
-    regionZoom : function(val) {
-      map.setZoom(val);
+      var json = { name : app.selectedRegion, image : app.selectedImage, bounds: app.selectedBounds };
+      app.json = JSON.stringify(json, null, '  ');
     },
 
     selectedRegion : function(key) {
-      console.log(key)
+      console.log('change region to ', key)
       var region = null;
       for(var i in app.regions) {
         if(app.regions[i].name === key) {
@@ -74,6 +78,7 @@ var app = new Vue({
       console.log(region);
       if(!region)
         return;
+      console.log(app.overlayURI)
       var center = {
         lat : ((+region.bounds[0].lat) + (+region.bounds[2].lat))/2,
         lng : ((+region.bounds[0].lng) + (+region.bounds[2].lng))/2
@@ -83,8 +88,7 @@ var app = new Vue({
       $.get('/bounds/' + key, function(data) {
         var bounds = JSON.parse(data);
         console.log('bounds', bounds);
-        // clear rect and redraw
-        app.selectedBounds = bounds.bounds;
+        // place new markers
         for(var i in markers) {
           markers[i].setMap(null);
         }
@@ -92,37 +96,71 @@ var app = new Vue({
         var marker1 = new google.maps.Marker({
                 position: region.bounds[0],
                 label : 'LT',
-                map: map
+                map: map,
+                draggable : true
         });
+        marker1.addListener('drag', updateRegionRectAndOverlay);
         var marker2 = new google.maps.Marker({
                 position: region.bounds[2],
                 label : 'RB',
-                map: map
+                map: map,
+                draggable : true
         });
+        marker2.addListener('drag', updateRegionRectAndOverlay);
         markers = [marker1, marker2];
-        var rectBounds = {
-          north: Math.max(markers[0].position.lat(), markers[1].position.lat()),
-          south: Math.min(markers[0].position.lat(), markers[1].position.lat()),
-          east: Math.max(markers[0].position.lng(), markers[1].position.lng()),
-          west: Math.min(markers[0].position.lng(), markers[1].position.lng())
-        };
-        rect = new google.maps.Rectangle({
-          strokeOpacity: 0.8,
-          strokeWeight: 0,
-          fillColor: '#007dff',
-          fillOpacity: 0.35,
-          map: map,
-          bounds: rectBounds
-        });
+        // redraw
+        app.selectedBounds = bounds.bounds;
+        app.selectedImage = region.image;
+        app.overlayURI = '/overlay/' + region.name;
+        var json = { name : app.selectedRegion, image : app.selectedImage, bounds: app.selectedBounds };
+        app.json = JSON.stringify(json, null, '  ');
       });
       app.regionCenter = center;
     },
+
+    selectedImage(val) {
+      var json = { name : app.selectedRegion, image : app.selectedImage, bounds: app.selectedBounds };
+      app.json = JSON.stringify(json, null, '  ');
+      app.overlayURI = '/region-raw-img/'+val;
+    }
 
   },
 
   // methods
 
   methods : {
+
+    createRegion : function() {
+      var name = window.prompt('Please enter id of the region');
+      var json = {
+        bounds : [{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0},{lat:0, lng:0}]
+      };
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST','/regions/'+name);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify(json));
+      xhr.onreadystatechange = function() {
+        if(xhr.readyState === 4) {
+          app.getRegions();
+        }
+      }
+
+    },
+
+    createImage : function() {
+
+    },
+
+    setTMSCoords : function(val) {
+      var coords = [val.zoom, val.lt.x, val.lt.y].join(',');
+      app.viewerTMSCoord = coords;
+      app.renderViewer();
+    },
+
+    navigate : function() {
+      console.log(app.regionCenter)
+      map.setCenter(app.regionCenter);
+    },
 
     stat : function() {
       var json = { bounds: app.selectedBounds };
@@ -148,18 +186,26 @@ var app = new Vue({
       app.config.ranges = ranges;
     },
 
-    getRegions : function() {
-       $.get('/regions', function(data) {
-         console.log(app.regions)
-         console.log('regions', data);
-         regions = data;
-         for(var i in data) {
-           var meta = data[i];
-           app.regions.push(meta)
-         }
-         console.log(app.regions);
+    getRegions() {
+      $.get('/regions', function(data) {
+       console.log('regions', data);
+       var next = [];
+       regions = data;
+       for(var i in data) {
+         var meta = data[i];
+         next.push(meta)
+       }
+       app.regions = next;
+       console.log(app.regions);
 
-       });
+      });
+    },
+
+    getImages() {
+      $.get('/images', function(data) {
+       console.log('images', data);
+       app.images = data;
+      });
     },
 
     renderViewer() {
@@ -167,7 +213,6 @@ var app = new Vue({
       var x = Math.floor(String(app.viewerTMSCoord).split(',')[1]);
       var y = Math.floor(String(app.viewerTMSCoord).split(',')[2]);
       var tiles = [];
-
       for(var j = 0; j < app.viewerHeight; j++) {
         var row = [];
         for(var i = 0; i < app.viewerWidth; i++) {
@@ -192,16 +237,13 @@ var app = new Vue({
       app.renderViewer();
     },
 
-    updateRegionBounds() {
-      var body = {};
-      body.bounds = app.selectedBounds;
+    save() {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/bounds/'+ app.selectedRegion);
+      xhr.open('PUT', '/regions/'+ app.selectedRegion);
       xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(JSON.stringify(body));
-      console.log(app.selectedBounds);
-    }
-
+      app.json.image = app.selectedImage;
+      xhr.send(app.json);
+    },
 
   },
 
@@ -213,7 +255,8 @@ function initMap() {
   map = new google.maps.Map(document.getElementById('map'), {
     zoom: 16,
     center: {lat: -34.9270088, lng: 138.6089918},
-    mapTypeId: google.maps.MapTypeId.TERRAIN
+    mapTypeId: google.maps.MapTypeId.TERRAIN,
+    scrollwheel:  false
   });
   map.addListener('click', function(event) {
     if(markers.length > 1) {
@@ -230,38 +273,88 @@ function initMap() {
     var marker = new google.maps.Marker({
             position: ll,
             label : markers.length === 0 ? 'LT' : 'RB',
+            draggable : true,
             map: map
     });
+    marker.addListener('drag', updateRegionRectAndOverlay);
     var info = new google.maps.InfoWindow();
     info.setContent('lat: ' + ll.lat + '<br>' + 'lng: ' + ll.lng);
     info.open(map, marker);
     markers.push(marker);
     // draw rect
     if(markers.length === 2) {
-      var bounds = {
-        north: Math.max(markers[0].position.lat(), markers[1].position.lat()),
-        south: Math.min(markers[0].position.lat(), markers[1].position.lat()),
-        east: Math.max(markers[0].position.lng(), markers[1].position.lng()),
-        west: Math.min(markers[0].position.lng(), markers[1].position.lng())
-      };
+      var bounds = getBoundsFromMarkers();
       rect && rect.setMap(null);
-      rect = new google.maps.Rectangle({
-        strokeOpacity: 0.8,
-        strokeWeight: 0,
-        fillColor: '#007dff',
-        fillOpacity: 0.35,
-        map: map,
-        bounds: bounds
-      });
-      app.selectedBounds = [
-        { lat : bounds.west, lng : bounds.north  },
-        { lat : bounds.east, lng : bounds.north  },
-        { lat : bounds.east, lng : bounds.south  },
-        { lat : bounds.west, lng : bounds.south  },
-      ];
+      updateRegionRectAndOverlay();
       console.log('rectBounds', bounds)
     }
   });
+}
+
+function updateRegionRectAndOverlay() {
+  console.log('redraw ..')
+  if(markers.length < 2) {
+    return;
+  }
+  overlay && overlay.setMap(null);
+  rect && rect.setMap(null);
+  var rectBounds = getBoundsFromMarkers();
+  rect = new google.maps.Rectangle({
+    strokeOpacity: 0.8,
+    strokeColor : '#00b2ff',
+    strokeWeight: 2,
+    fillColor: '#00b2ff',
+    fillOpacity: 0.10,
+    draggable : true,
+    map: map,
+    zIndex : 0,
+    bounds: rectBounds
+  });
+  rect.addListener('dragend', function() {
+    var rt = {
+      lat : rect.getBounds().getNorthEast().lat(),
+      lng : rect.getBounds().getNorthEast().lng(),
+    };
+    var lb = {
+      lat : rect.getBounds().getSouthWest().lat(),
+      lng : rect.getBounds().getSouthWest().lng(),
+    };
+    if(markers.lengt <2)
+      return;
+    markers[0].setPosition({ lat : lb.lat, lng : rt.lng });
+    markers[1].setPosition({ lat : rt.lat, lng : lb.lng });
+    overlay && overlay.setMap(null);
+    overlay = new google.maps.GroundOverlay(app.overlayURI, getBoundsFromMarkers());
+    overlay.setMap(map);
+    app.selectedBounds = getTileRegionBoundsFromMarkers();
+  });
+  if(app.overlayURI) {
+    overlay && overlay.setMap(null);
+    overlay =  new google.maps.GroundOverlay(app.overlayURI, rectBounds);
+    overlay.setMap(map)
+  }
+  app.selectedBounds = getTileRegionBoundsFromMarkers();
+}
+
+function getTileRegionBoundsFromMarkers() {
+  var bounds = getBoundsFromMarkers();
+  return [
+    { lng : bounds.west, lat : bounds.north  },
+    { lng : bounds.east, lat : bounds.north  },
+    { lng : bounds.east, lat : bounds.south  },
+    { lng : bounds.west, lat : bounds.south  },
+  ];
+}
+
+function getBoundsFromMarkers() {
+  if(markers.length < 2)
+    return null;
+  return {
+    north: Math.max(markers[0].position.lat(), markers[1].position.lat()),
+    south: Math.min(markers[0].position.lat(), markers[1].position.lat()),
+    east: Math.max(markers[0].position.lng(), markers[1].position.lng()),
+    west: Math.min(markers[0].position.lng(), markers[1].position.lng())
+  };
 }
 
 function fromLatLngToPoint (latLng){

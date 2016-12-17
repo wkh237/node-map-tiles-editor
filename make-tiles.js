@@ -15,6 +15,7 @@ var regionName = process.argv[2];
 var min = +process.argv[3];
 var max = +process.argv[4];
 var val = JSON.parse(fs.readFileSync('./regions/'+regionName+'.json')).bounds;
+var imgp = './region-raw-img/' + JSON.parse(fs.readFileSync('./regions/'+regionName+'.json')).image;
 console.log(val)
 console.log('generate tiles:', regionName, min+'x', '~', max+'x');
 // get tms bounds for each zoom level
@@ -41,8 +42,8 @@ var start = Date.now();
 for(var i=min;i<=max;i++) {
   var lt = getTileAtLatLng(val[0], i);
   var rb = getTileAtLatLng(val[2], i);
-  for(var j = lt.x; j < rb.x;j++){
-    for(var k=lt.y; k < rb.y;k++) {
+  for(var j = lt.x; j <= rb.x;j++){
+    for(var k=lt.y; k <= rb.y;k++) {
       createTileFromRawImage(regionName, j,k,i, function() {
         now++;
         var time = Math.floor((total-now)*((Date.now() - start)/now)/1000);
@@ -72,6 +73,7 @@ function createTileFromRawImage(region, x, y, z, cb) {
   let data = fs.readFileSync(`./regions/${region}.json`);
 
   let {bounds} = JSON.parse(data);
+  let sign = bounds[0].lat < 0 ? 1 : -1;
   let tileBounds = [
     tileToLatLng(x,y,z),
     tileToLatLng(x+1,y,z),
@@ -79,7 +81,7 @@ function createTileFromRawImage(region, x, y, z, cb) {
     tileToLatLng(x,y+1,z)
   ];
 
-  var raw = imageCache[region] ? imageCache[region] : fs.readFileSync(`./region-raw-img/${region}.png`);
+  var raw = imageCache[region] ? imageCache[region] : fs.readFileSync(imgp);
   let img = new Image;
   img.src = raw;
 
@@ -100,6 +102,9 @@ function createTileFromRawImage(region, x, y, z, cb) {
     return
   }
   else {
+    if(sign<0) {
+      originY = img.height - originY - 512 - img.height%256;
+    }
     ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
     ctx.strokeStyle = 'transparent';
     ctx.strokeRect(0, 0, 256, 256);
@@ -107,7 +112,7 @@ function createTileFromRawImage(region, x, y, z, cb) {
 
   var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
 
-  var dir = `./regions/${region}/${z}/${x}${y}.png`;
+  var dir = `./regions/output/${region}/${z}/${x}${y}.png`;
   mkdirp.sync(getDirName(dir));
   fs.writeFileSync(dir, bytes);
   cb();

@@ -8,79 +8,76 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
   </head>
   <body>
-    <div id="app">
-      <div class="row">
+    <div id="app" style="height : 100vh;">
+      <!-- region selector -->
+      <div id="nav" class="row">
+        <p>Region</p>
+        <select v-model="selectedRegion">
+          <option v-for="r in regions" v-bind:value="r.name">
+            {{ r.name }}
+          </option>
+        </select>
+        <button v-on:click="createRegion">New Region</button>
+        <p>Image</p>
+        <select v-model="selectedImage">
+          <option v-for="r in images" v-bind:value="r">
+            {{ r }}
+          </option>
+        </select>
+        <button v-on:click="createImage">Upload</button>
+        <button v-on:click="save">Save Changes</button>
+      </div>
+      <div id="content" style="height:90vh; overflow-y:scroll;">
+        <!-- google map view -->
+        <div id="map"></div>
         <!-- map view -->
         <div class="row" >
-          <p>Regions</p>
-          <select v-model="selectedRegion">
-            <option v-for="r in regions" v-bind:value="r.name">
-              {{ r.name }}
-            </option>
-          </select>
-          <div class="row">
-            <button v-on:click="regionZoom+=1">+</button>
-            <p id="region-z">Zoom x {{ regionZoom }}</p>
-            <button v-on:click="regionZoom-=1">-</button>
-          </div>
           <div class="row">
             <p>Latitude</p>
-            <input v-model="regionCenter.lat"/>
+            <input type="number" v-model="regionCenter.lat"/>
           </div>
           <div class="row">
             <p>Longitude</p>
-            <input v-model="regionCenter.lng"/>
+            <input type="number" v-model="regionCenter.lng"/>
           </div>
-          <div id="map"></div>
+          <button v-on:click="navigate">Go</button>
         </div>
         <!-- tiles test view -->
-        <div id="viewer-panel">
-          <textarea name="name" rows="6" cols="80" v-model="json"></textarea>
-          <p>Origin</p>
-          <div class="row">
-            name&nbsp;<input type="text" placeholder="region" v-model="selectedRegion"/>
-            TMS coord&nbsp;<input type="text" placeholder="z,x,y" v-model="viewerTMSCoord"/>
-          </div>
-          <div class="row">
-            <input type="text" placeholder="width" v-model="viewerWidth"/> x
-            <input type="text" placeholder="height" v-model="viewerHeight"/>
-            <button v-on:click="renderViewer">render</button>
-          </div>
-          <div>
-            <p>Top left</p>
-            <input type="number" placeholder="lat" v-model="selectedBounds[0].lat"/>
-            <input type="number" placeholder="lng" v-model="selectedBounds[0].lng"/>
-            <button v-on:click="updateRegionBounds">update</button>
-          </div>
-          <div>
-            <p>Bottom right</p>
-            <input type="number" placeholder="lat" v-model="selectedBounds[2].lat"/>
-            <input type="number" placeholder="lng" v-model="selectedBounds[2].lng"/>
-            <button v-on:click="updateRegionBounds">update</button>
-          </div>
-          <button v-on:click="viewerMove(0,-1,0)">↑</button>
+        <p>Output JSON</p>
+        <textarea id="json" name="name" rows="22" cols="80" v-model="json"></textarea>
+        <div class="row">
+          <p>TMS coord</p>
+          <input type="text" placeholder="z,x,y" v-model="viewerTMSCoord"/>
+          <p>View Port</p>
+          <input type="text" placeholder="width" v-model="viewerWidth"/> x
+          <input type="text" placeholder="height" v-model="viewerHeight"/>
+        </div>
+        <!-- tile view control panel -->
+        <button v-on:click="viewerMove(0,-1,0)">↑</button>
+        <div class="row">
           <button v-on:click="viewerMove(-1,0,0)">←</button>
           <button v-on:click="viewerMove(0,0,1)">+</button>
+          <button v-on:click="renderViewer">Render Tiles</button>
           <button v-on:click="viewerMove(0,0,-1)">-</button>
           <button v-on:click="viewerMove(1,0,0)">→</button>
-          <button v-on:click="viewerMove(0,1,0)">↓</button>
-          <!-- render tiles -->
-          <div>
-            <div v-for="row in tiles" style="line-height:0">
-              <div class="tile-wrapper" v-for="tile in row">
+        </div>
+        <button v-on:click="viewerMove(0,1,0)">↓</button>
+        <!-- render tiles -->
+        <div>
+          <div v-for="row in tiles" style="line-height:0">
+            <div class="tile-wrapper" v-for="tile in row">
+              <img
+                class="overlay-tile"
+                class="overlay-tile"
+                height="128"
+                width="128"
+                v-bind:src="tile.base"/>
                 <img
                   class="overlay-tile"
                   class="overlay-tile"
                   height="128"
                   width="128"
-                  v-bind:src="tile.base"/>
-                  <img
-                    class="overlay-tile"
-                    class="overlay-tile"
-                    height="128"
-                    width="128"
-                    v-bind:src="tile.src"/>
-              </div>
+                  v-bind:src="tile.src"/>
             </div>
           </div>
         </div>
@@ -91,17 +88,28 @@
             <p>Zoom</p>
             <input type="number" v-model="config.zoomMin" v-on:change="stat"/> ~
             <input type="number" v-model="config.zoomMax" v-on:change="stat"/>
-            <!-- list -->
           </div>
-          <div v-for="s in config.ranges">
-            {{s.zoom}}X ({{s.lt.x}}~{{s.rb.x}}, {{s.lt.y}}~{{s.rb.y}}) {{s.width}}x{{s.height}}, {{ s.number }} tiles
+          <div class="table header">
+            <p>Zoom</p>
+            <p>Range</p>
+            <p>Dimension</p>
+            <p>Tile Number</p>
+            <p>Set As Origin</p>
+          </div>
+          <div class="table" v-for="s in config.ranges">
+            <p>{{s.zoom}}X</p>
+            <p>({{s.lt.x}}~{{s.rb.x}}, {{s.lt.y}}~{{s.rb.y}})</p>
+            <p>{{s.width}}x{{s.height}}</p>
+            <p>{{ s.number }}</p>
+            <button v-on:click="setTMSCoords(s)">Set</button>
           </div>
         </div>
       </div>
+
     </div>
   </body>
   <script src="https://unpkg.com/vue/dist/vue.js"></script>
   <script src="app.js" charset="utf-8"></script>
   <script async defer
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAUk8DEJj1B2efER6W3pLBUyMwthTiumUo&signed_in=true&callback=initMap"></script>
+  src="https://maps.googleapis.com/maps/api/js?key=<API KEY HERE>&signed_in=true&callback=initMap"></script>
 </html>

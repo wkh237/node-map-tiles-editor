@@ -15,6 +15,8 @@ var imgCache = {};
 app.set('port', (process.env.PORT || 5000));
 
 app.use('/public', express.static('public'));
+app.use('/editor', express.static('public'));
+app.use('/region-raw-img', express.static('region-raw-img'));
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
@@ -22,6 +24,60 @@ app.use(bodyParser.json());
 app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
+
+app.get('/', function(req,res) {
+  res.redirect('/editor/');
+})
+
+app.get('/images', function(req, res) {
+
+  var images = fs.readdirSync('./region-raw-img/');
+  res.send(images);
+
+})
+
+app.get('/overlay/:region', function(req, res) {
+  try {
+    var region = req.params.region;
+    var img = JSON.parse(fs.readFileSync('./regions/' + region + '.json')).image;
+    var overlay = process.cwd() + '/region-raw-img/' + img;
+    res.sendFile(overlay);
+  }
+  catch(err) {
+    console.log(err.stack);
+  }
+})
+
+app.put('/regions/:name', function(req, res) {
+
+    var name = req.params.name;
+    var body = req.body;
+    console.log(name, body);
+    try {
+      fs.writeFileSync('./regions/'+name+'.json', JSON.stringify(body));
+    }
+    catch(err) {
+      console.log(err.stack);
+      res.sendStatus(500);
+    }
+    res.sendStatus(200);
+})
+
+app.post('/regions/:name', function(req, res) {
+
+  var name = req.params.name;
+  var body = req.body;
+  console.log(name, body);
+  try {
+    fs.writeFileSync('./regions/'+name+'.json', JSON.stringify(body));
+  }
+  catch(err) {
+    console.log(err.stack);
+    res.sendStatus(500);
+  }
+  res.sendStatus(200);
+
+})
 
 app.get('/regions', function(req, res) {
 
@@ -71,7 +127,7 @@ app.get('/bounds/:region', function(req, res) {
 
 })
 
-app.get('/reset-cache/:region', function(req,res) {
+app.delete('/tiles/:region', function(req,res) {
 
   var region = req.params.region;
   try {
@@ -103,12 +159,6 @@ app.get('/lookup/:z/:x/:y', function(req, res) {
 
 });
 
-app.get('/dummy-tiles/:region/:z/:x/:y', function (req, res) {
-  var {x, y, z, region} = req.params;
-  console.log('dummy tile: ', region, x, y, z);
-  res.type('image/png').send(generateTile(x,y,z));
-});
-
 app.get('/tiles/debug/:region/:z/:x/:y/', handleTileRequestDebug);
 app.get('/tiles/:region/:z/:x/:y/', handleTileRequest);
 
@@ -118,24 +168,28 @@ function handleTileRequestDebug(req, res) {
 }
 
 function handleTileRequest(req, res) {
-  var {x, y, z, region, debug} = req.params;
-  console.log(`make tile: ${region}/${z}/${x}/${y}`);
-  let tilePath = `./regions/${region}/${debug ? 'debug/' : ''}${z}/${x}${y}.png`;
-  fs.exists(tilePath, (ext) => {
+  try {
+    var {x, y, z, region, debug} = req.params;
+    console.log(`make tile: ${region}/${z}/${x}/${y}`);
+    let tilePath = `./regions/${region}/${debug ? 'debug/' : ''}${z}/${x}${y}.png`;
+    fs.exists(tilePath, (ext) => {
 
-    if(ext) {
-      console.log('found tile', tilePath);
-      fs.readFile(tilePath, (err, data) => {
-        res.type('image/png').send(data);
-      });
-    }
-    else {
-      createTileFromRawImage(region, x, y, z, debug, function(bytes) {
-        console.log('send tile')
-        res.type('image/png').send(bytes);
-      });
-    }
-  });
+      if(ext) {
+        console.log('found tile', tilePath);
+        fs.readFile(tilePath, (err, data) => {
+          res.type('image/png').send(data);
+        });
+      }
+      else {
+        createTileFromRawImage(region, x, y, z, debug, function(bytes) {
+          console.log('send tile')
+          res.type('image/png').send(bytes);
+        });
+      }
+    });
+  } catch(err) {
+    console.log(err.stack)
+  }
 }
 
 app.get('/base/:z/:x/:y', function(req,res) {
@@ -156,45 +210,6 @@ app.get('/base/:z/:x/:y', function(req,res) {
   });
 })
 
-app.get('/exps/:id', function(req, res) {
-  res.send(dummyExperience(req.params.id));
-});
-
-app.get('/pins', function(req, res) {
-  res.send(regions.pins);
-});
-
-app.get('/pins/:id', function(req, res) {
-  res.send(pins[req.params.id]);
-});
-
-function dummyExperience(id) {
-  var type = Math.random() > 0.8 ? 'label' : 'link';
-  if(type === 'link') {
-    var expired = Math.random() > 0.6;
-    var image = Math.floor((Math.random() - 0.01) * 4);
-
-    return {
-      exp_id :  'Experience #' + id,
-      label : 'Experience #' + id,
-      state : expired ? 'expired' : 'current',
-      start : expired ? '2016/11/08 14:30:00' : moment(Date.now() - 3600000 * Math.random()*2).format('YYYY/MM/DD HH:mm:ss'),
-      end : expired ? '2016/11/08 15:00:00' : moment(Date.now() + 3600000 * Math.random()*5).format('YYYY/MM/DD HH:mm:ss'),
-      hero_photo : 'public/event-bg' + image + '.png',
-      content : 'this is the text description',
-      pin_id : null
-    };
-  }
-  else {
-    return {
-      exp_id : 'Experience #' + id,
-      label : 'Label only',
-      content : 'this is the text description',
-      pin_id : null
-    };
-  }
-};
-
 function tileToLatLng(x,y,z) {
   let result = { lat : tileToLat(y,z), lng : tileToLong(x,z) };;
   return result;
@@ -213,9 +228,19 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
   x = Math.floor(x);
   y = Math.floor(y);
   z = Math.floor(z);
-  let bounds = fs.readFile(`./regions/${region}.json`, (err, data) => {
-
-    let {bounds} = JSON.parse(data);
+  fs.readFile(`./regions/${region}.json`, (err, data) => {
+    let bounds = [];
+    let img = '';
+    try {
+      bounds = JSON.parse(data).bounds;
+      img = JSON.parse(data).image;
+      console.log(bounds);
+    }
+    catch(err) {
+      console.log(err.stack);
+      return;
+    }
+    let sign = bounds[0].lat < 0 ? 1 : -1;
     let tileBounds = [
       tileToLatLng(x,y,z),
       tileToLatLng(x+1,y,z),
@@ -226,7 +251,7 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
       render(null, imgCache);
     }
     else {
-      fs.readFile(`./region-raw-img/${region}.png`, render);
+      fs.readFile(`./region-raw-img/${img}`, render);
     }
 
     function render(err, data) {
@@ -248,6 +273,9 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
       let tileImg = new Canvas(256, 256);
       let originX = (Math.abs(tileBounds[0].lng) - Math.abs(bounds[0].lng))/regionWidth * img.width;
       let originY = (Math.abs(tileBounds[0].lat) - Math.abs(bounds[0].lat))/regionHeight * img.height;
+      if(sign<0) {
+        originY = img.height - originY - 512 - img.height%256;
+      }
       let ctx = tileImg.getContext('2d');
 
       if( originX > img.width + tileWidth ||
@@ -268,9 +296,10 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
 
         console.log(`fill size (${tileWidth}, ${tileHeight})`);
         console.log(`project (${originX}, ${originY}, ${originX + tileWidth}, ${originY + tileHeight})`);
+
         ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
         if(debug) {
-          drawText(ctx,{region, x,y,z}, originX,originY,tileWidth, tileHeight, z);
+          drawText(ctx,{x,y,z}, originX,originY,tileWidth, tileHeight, z);
         }
         ctx.strokeRect(0, 0, 256, 256);
         ctx.fillStyle = '#DDD';
@@ -278,7 +307,7 @@ function createTileFromRawImage(region, x, y, z, debug, cb) {
 
       var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
       console.log('size', bytes.length);
-      var dir = `./regions/${region}/${debug ? 'debug/' : ''}${z}/${x}${y}.png`;
+      var dir = `./regions/debug/${region}/${z}/${x}${y}.png`;
       mkdirp(getDirName(dir), function (err) {
         if (err)
           console.log(err);
@@ -316,26 +345,6 @@ function drawText(ctx,param, ox,oy, dx, dy, z) {
   ctx.fillText(z + 'x', 144, 255);
 }
 
-function generateTile(x,y,z) {
-
-  var canvas = new Canvas(256, 256);
-  var ctx = canvas.getContext('2d');
-
-  var coords = '(' + [x, y].join(', ') + ')';
-  ctx.rect(0, 0, 256, 256);
-  ctx.fillStyle = '#F0F0F0';
-  ctx.fill();
-  ctx.fillStyle = '#333';
-  ctx.font = '16px Arial';
-  ctx.fillText(coords, 24, 64);
-  ctx.strokeStyle = 'white';
-  ctx.strokeRect(0, 0, 256, 256);
-  ctx.fillStyle = '#DDD';
-  ctx.font = '64px Arial';
-  ctx.fillText(z + 'x', 64, 192);
-  var bytes = canvas.toBuffer(undefined, 3, canvas.PNG_FILTER_NONE);
-  return bytes;
-}
 
 var deleteFolderRecursive = function(path, cb) {
   if( fs.existsSync(path) ) {
