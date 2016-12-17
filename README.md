@@ -20,20 +20,20 @@ It's recommended to use a smaller one for synthesizing the image to map, because
 
 Simply clone or download the project 
 
-```
+```sh
 $ git clone https://github.com/wkh237/node-map-tiles-editor.git
 ```
 
 Before get started, you should replace your Google Map's API KEY in `public/index.html` 
 
-```
+```html
 <script async defer
   src="https://maps.googleapis.com/maps/api/js?key=<API KEY HERE>&signed_in=true&callback=initMap"></script>
 ```
 
 Then start the node server
 
-```
+```sh
 $ node .
 ```
 
@@ -98,7 +98,7 @@ To render sample tiles simply change the arguments on the panel and click `Rende
 
 After everything's confirmed, now go to terminal and create tiles via command :
 
-```
+```sh
 # format : node make-tiles <region name> <zoom-min> <zoom-max>
 $ node make-tiles example 15 20
 ```
