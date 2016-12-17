@@ -6,6 +6,7 @@ This is an instruction about making custom map tiles using [node-map-tiles-edito
 
 - Node.JS > 7.1.
 - **node-canvas** platform dependencies installed. [see instruction](https://github.com/Automattic/node-canvas#installation)
+- A valid google map API key
 
 ## Prepare Image 
 
@@ -23,6 +24,13 @@ Simply clone or download the project
 $ git clone https://github.com/wkh237/node-map-tiles-editor.git
 ```
 
+Before get started, you should replace your Google Map's API KEY in `public/index.html` 
+
+```
+<script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=<API KEY HERE>&signed_in=true&callback=initMap"></script>
+```
+
 Then start the node server
 
 ```
@@ -32,6 +40,7 @@ $ node .
 Now you should be able to visit the editor via browser :
 
 [http://localhost:5000/editor](http://localhost:5000/editor)
+
 
 ## Create a Region
 
