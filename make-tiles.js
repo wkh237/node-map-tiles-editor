@@ -14,6 +14,7 @@ console.log(process.argv);
 var regionName = process.argv[2];
 var min = +process.argv[3];
 var max = +process.argv[4];
+var debug = +process.argv[5];
 var val = JSON.parse(fs.readFileSync('./regions/'+regionName+'.json')).bounds;
 var imgp = './region-raw-img/' + JSON.parse(fs.readFileSync('./regions/'+regionName+'.json')).image;
 console.log(val)
@@ -34,7 +35,7 @@ for(var i = min; i <= max ; i++) {
     height : h,
     number : w*h
   });
-  total += w*h;
+  total += (w+1)*(h+1);
 }
 console.log('tiles needs to be generated :', total);
 var now = 0;
@@ -108,11 +109,14 @@ function createTileFromRawImage(region, x, y, z, cb) {
     ctx.drawImage(img, originX, originY, tileWidth, tileHeight, 0, 0, 256, 256);
     ctx.strokeStyle = 'transparent';
     ctx.strokeRect(0, 0, 256, 256);
+    if(debug) {
+      drawText(ctx,{x,y,z}, originX,originY,tileWidth, tileHeight, z);
+    }
   }
 
   var bytes = tileImg.toBuffer(undefined, 3, ctx.PNG_FILTER_NONE);
 
-  var dir = `./regions/output/${region}/${z}/${x}${y}.png`;
+  var dir = `./regions/output/${debug?'debug/':''}${region}/${z}/${x}${y}.png`;
   mkdirp.sync(getDirName(dir));
   fs.writeFileSync(dir, bytes);
   cb();
@@ -133,6 +137,21 @@ var deleteFolderRecursive = function(path, cb) {
   }
   cb()
 };
+
+function drawText(ctx,param, ox,oy, dx, dy, z) {
+  var {region,x,y,z} = param;
+  var info = `${z}/${x}/${y}`;
+  var coords = 'from (' + [Math.round(ox), Math.floor(oy)].join(', ') + ')';
+  var coords2 = 'to (' + [Math.round(ox+dx), Math.floor(oy + dy)].join(', ') + ')';
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#FFF';
+  ctx.fillText(info, 8, 24);
+  ctx.fillText(coords, 8, 48);
+  ctx.fillText(coords2, 8, 64);
+  ctx.font = '64px Arial';
+  ctx.fillText(z + 'x', 144, 255);
+}
+
 
 function fromLatLngToPoint (latLng){
   var siny =  Math.min(Math.max(Math.sin(latLng.lat* (Math.PI / 180)), -.9999),.9999);
